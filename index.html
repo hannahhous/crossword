@@ -289,10 +289,15 @@ button { font: inherit; color: inherit; }
   border-radius: 50%; pointer-events: none;
 }
 .cell.active .circ { border-color: var(--active-ink); }
-/* Big grids: clues go below the grid so the grid can use the full width */
+/* Big grids: wider page, grid fills the space, clues stack in a column on the right */
+.page.wide { max-width: 1440px; }
 @media (min-width: 860px) {
-  .board.big { grid-template-columns: minmax(0, 1fr); }
-  .board.big .list-scroll { max-height: none; }
+  .board.big { grid-template-columns: minmax(0, 1fr) minmax(250px, 340px); }
+  .board.big .lists {
+    grid-template-columns: 1fr; position: sticky;
+    top: calc(env(safe-area-inset-top, 0px) + 1rem);
+  }
+  .board.big .list-scroll { max-height: calc(50vh - 4rem); }
 }
 .cell.cross-hint { background: var(--cell); }
 .cell.word { background: var(--word); }
@@ -510,7 +515,10 @@ dialog p { margin: 0 0 1.25rem; }
   const gridEl = $("grid"), kbd = $("kbd");
   gridEl.style.setProperty("--cols", C);
   if (P.grid.some((row) => row.includes("."))) gridEl.classList.add("freeform");
-  if (C > 18) document.querySelector(".board").classList.add("big");
+  if (C > 18) {
+    document.querySelector(".board").classList.add("big");
+    document.querySelector(".page").classList.add("wide");
+  }
   gridEl.style.gridTemplateColumns = `repeat(${C}, 1fr)`;
   cells.flat().forEach((cell) => {
     const el = document.createElement("div");
