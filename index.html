@@ -10,7 +10,9 @@
 
 <!-- =====================================================================
      YOUR PUZZLE GOES HERE
-     - grid: one string per row. Letters are answers, # is a black square.
+     - grid: one string per row. Letters are answers, # is a black square,
+       and . is empty space (invisible, for freeform puzzles).
+     - circles (optional): same shape as the grid, with O marking a circled square.
        Every row must be the same length.
      - clues: numbered to match the grid. Numbers are assigned
        automatically, left to right, top to bottom, the standard way.
@@ -249,7 +251,7 @@ button { font: inherit; color: inherit; }
 /* Board layout */
 .board { display: grid; gap: 1.75rem; }
 @media (min-width: 860px) {
-  .board { grid-template-columns: minmax(300px, 500px) minmax(0, 1fr); align-items: start; }
+  .board { grid-template-columns: minmax(300px, 640px) minmax(0, 1fr); align-items: start; }
 }
 
 .play { min-width: 0; }
@@ -265,9 +267,10 @@ button { font: inherit; color: inherit; }
 .clue-bar .text { padding: .5rem 0; font-size: 1.05rem; }
 .clue-bar .label { font-weight: 700; margin-right: .5rem; }
 
-.grid-wrap { position: relative; container-type: inline-size; padding: 0 6px 6px 0; }
+.grid-wrap { position: relative; padding: 0 6px 6px 0; overflow-x: auto; }
 #grid {
-  display: grid; gap: 1px;
+  display: grid; gap: 1px; container-type: inline-size;
+  min-width: calc(var(--cols) * 26px);
   background: var(--gridline); border: 3px solid var(--gridline);
   box-shadow: 6px 6px 0 var(--word);
   touch-action: manipulation;
@@ -277,6 +280,20 @@ button { font: inherit; color: inherit; }
   display: grid; place-items: center; cursor: pointer; user-select: none; -webkit-user-select: none;
 }
 .cell.block { background: var(--block); cursor: default; }
+/* Freeform puzzles: "." squares are empty space instead of black squares */
+#grid.freeform { background: none; border: 0; box-shadow: none; gap: 0; }
+#grid.freeform .cell:not(.void) { outline: 2px solid var(--gridline); outline-offset: -1px; }
+.cell.void { background: transparent; cursor: default; }
+.cell .circ {
+  position: absolute; inset: 7%; border: 1.5px solid var(--muted);
+  border-radius: 50%; pointer-events: none;
+}
+.cell.active .circ { border-color: var(--active-ink); }
+/* Big grids: clues go below the grid so the grid can use the full width */
+@media (min-width: 860px) {
+  .board.big { grid-template-columns: minmax(0, 1fr); }
+  .board.big .list-scroll { max-height: none; }
+}
 .cell.cross-hint { background: var(--cell); }
 .cell.word { background: var(--word); }
 .cell.active { background: var(--active); }
@@ -325,7 +342,7 @@ button { font: inherit; color: inherit; }
   font-size: 1.15rem; margin: 0; padding-bottom: .4rem; border-bottom: 2px solid var(--ink);
 }
 .list-scroll { position: relative; overflow-y: auto; }
-@media (min-width: 860px) { .list-scroll { max-height: 470px; } }
+@media (min-width: 860px) { .list-scroll { max-height: 620px; } }
 .lists ol { list-style: none; margin: 0; padding: .35rem 0 0; }
 .lists li {
   display: grid; grid-template-columns: 2.1em 1fr; gap: .2rem;
@@ -441,7 +458,8 @@ dialog p { margin: 0 0 1.25rem; }
 
   // ---- Build the model ----
   const cells = P.grid.map((row, r) => [...row].map((ch, c) => ({
-    r, c, block: ch === "#" || ch === ".", answer: ch.toUpperCase(),
+    r, c, block: ch === "#" || ch === ".", void: ch === ".", answer: ch.toUpperCase(),
+    circled: !!(P.circles && P.circles[r] && P.circles[r][c] === "O"),
     num: null, guess: "", state: "", el: null, across: null, down: null
   })));
   const open = (r, c) => r >= 0 && r < R && c >= 0 && c < C && !cells[r][c].block;
@@ -491,13 +509,16 @@ dialog p { margin: 0 0 1.25rem; }
   // ---- Build the grid ----
   const gridEl = $("grid"), kbd = $("kbd");
   gridEl.style.setProperty("--cols", C);
+  if (P.grid.some((row) => row.includes("."))) gridEl.classList.add("freeform");
+  if (C > 18) document.querySelector(".board").classList.add("big");
   gridEl.style.gridTemplateColumns = `repeat(${C}, 1fr)`;
   cells.flat().forEach((cell) => {
     const el = document.createElement("div");
-    el.className = "cell" + (cell.block ? " block" : "");
+    el.className = "cell" + (cell.void ? " void" : cell.block ? " block" : "");
     el.setAttribute("role", "gridcell");
     if (!cell.block) {
       if (cell.num) { const s = document.createElement("span"); s.className = "num"; s.textContent = cell.num; el.appendChild(s); }
+      if (cell.circled) { const o = document.createElement("span"); o.className = "circ"; el.appendChild(o); }
       const l = document.createElement("span"); l.className = "letter"; el.appendChild(l);
       el.addEventListener("mousedown", (e) => e.preventDefault());
       el.addEventListener("click", () => {
@@ -651,6 +672,12 @@ dialog p { margin: 0 0 1.25rem; }
       cl.toggle("revealed", x.state === "revealed");
       x.el.querySelector(".letter").textContent = x.guess;
     });
+    const wrap = gridEl.parentElement;
+    if (wrap.scrollWidth > wrap.clientWidth) {
+      const l = cur.el.offsetLeft, rt = l + cur.el.offsetWidth;
+      if (l < wrap.scrollLeft) wrap.scrollLeft = l - 8;
+      else if (rt > wrap.scrollLeft + wrap.clientWidth) wrap.scrollLeft = rt - wrap.clientWidth + 8;
+    }
     $("barLabel").textContent = e.num + (e.dir === "across" ? "A" : "D");
     $("barText").textContent = e.clue;
     liFor.forEach((li, entry) => {
